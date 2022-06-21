@@ -1,0 +1,1 @@
+<b>{{ $status }}</b> - last updated at <b>{{date_format($data->updated_at, 'd M Y @ H:i')}}</b>
