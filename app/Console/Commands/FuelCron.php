@@ -51,13 +51,15 @@ class FuelCron extends Command
         // prod
         $url = 'https://discord.com/api/webhooks/974804116842893412/0cWbeFIeSj5tKND8vwxAW2XuZkiSJKRz5Z86dqEQBno9ogU-DY1jgrN5Oqb9mAS4VN09';
 
-        $dd = Http::post($url, [
+        Http::post($url, [
             'content' => ''.$message.'',
             'username' => "BUSA Beacons",
             'avatar_url' => "http://games.chruker.dk/eve_online/graphics/ids/512/22262.jpg"
         ]);
 
         $this->info("Discord Webhook Sent");
+
+        return;
     }
 
     public function handle()
@@ -77,7 +79,7 @@ class FuelCron extends Command
         foreach($beacons as $beacon){
             // 43 Days Left
             $expires_in = str_replace(" Days Left", "", $beacon->expires_in);
-            if(strpos($beacon->expires_in, 'OFFLINE') !== false){
+            if(strpos($beacon->expires_in, '0FFLINE') !== false){
                 $OfflineData .= '`'. $beacon->system . ' '. $beacon->name . ': '. $beacon->expires_in .'`'. PHP_EOL;
             }
             elseif(strpos($beacon->expires_in, '[INCURSION]') !== false){

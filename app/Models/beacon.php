@@ -12,7 +12,7 @@ class beacon extends Model
     protected $table = 'beacons';
 
     protected $fillable = [
-        'structure_id', 'system', 'name', 'constellation', 'expires_in',
+        'structure_id', 'system', 'name', 'constellation', 'region','expires_in',
     ];
 
 

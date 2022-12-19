@@ -10,6 +10,7 @@ use DateTime;
 use App\Models\beacon;
 use App\Models\Status;
 use Illuminate\Support\Facades\Http;
+use Carbon\Carbon;
 
 class BeaconsCron extends Command
 {
@@ -18,6 +19,25 @@ class BeaconsCron extends Command
      *
      * @var string
      */
+
+    protected $signature = 'get:beacons {by} {numberOfTrys}';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Command description';
+
+    /**
+     * Create a new command instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+    }
 
      
     public function refreshToken($id){
@@ -39,17 +59,13 @@ class BeaconsCron extends Command
         # update the user's refresh token
         $this->info('got new token, updating it...');
 
-        $this->info($data['access_token']);
-
-        $update = DB::table('users')->where('name', 'Helious Jin-Mei')->update([
+        DB::table('users')->where('name', 'Helious Jin-Mei')->update([
             'accessToken' => $data['access_token'],
             'refreshToken' => $data['refresh_token'],
+            'updated_at' => Carbon::now()
         ]);
 
-        if($update){
-            $this->call('get:beacons');
-            return;
-        }
+        return;
     }
 
     public function GetIncusrions(){
@@ -71,64 +87,41 @@ class BeaconsCron extends Command
             echo 'Error:' . curl_error($ch);
         }
         curl_close($ch);
+        $data = json_decode($result, true);
+        $count = count($data);
+        $array = array();
 
-        return $result;
+
+        // loop through arrays and get infested_solar_systems
+        for ($x = 0; $x < $count; $x++) {
+            // get the infested_solar_systems
+            $infested_solar_systems = $data[$x]['infested_solar_systems'];
+            // push the infested_solar_systems to the array
+            array_push($array, $infested_solar_systems);
+        }
+
+        // merge array elements into a single array
+        $merged = array();
+        foreach ($array as $arr) {
+            foreach ($arr as $value) {
+                $merged[] = $value;
+            }
+        }
+
+        return $merged;
     }
 
     public function CheckForIncusrion($system){
-        $ch = curl_init();
-
-        curl_setopt($ch, CURLOPT_URL, 'https://esi.evetech.net/latest/search/?categories=solar_system&datasource=tranquility&language=en&search='.$system.'&strict=true');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
-        
-        
-        $headers = array();
-        $headers[] = 'Accept: application/json';
-        $headers[] = 'Accept-Language: en';
-        $headers[] = 'Cache-Control: no-cache';
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        
-        $result = curl_exec($ch);
-        $result = json_decode($result, true);
-        if (curl_errno($ch)) {
-            echo 'Error:' . curl_error($ch);
-        }
-        curl_close($ch);
-    
         $incursions = $this->GetIncusrions();
-        $incursions = json_decode($incursions, true);
+        $count = count($incursions);
 
-        $incursionsLength = count($incursions);
-        for($i = 0; $i < $incursionsLength; $i++){
-            foreach($incursions[$i]['infested_solar_systems'] as $infestedSystem){
-                if($infestedSystem == $result['solar_system'][0]){
-                    $this->info('Found incursion in '.$system);
-                    return true;
-                }
+        for($i = 0; $i < $count; $i++){
+            if($incursions[$i] == $system){
+                return true;
             }
         }
 
         return false;
-    }
-
-    protected $signature = 'get:beacons';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Command description';
-
-    /**
-     * Create a new command instance.
-     *
-     * @return void
-     */
-    public function __construct()
-    {
-        parent::__construct();
     }
 
     /**
@@ -138,30 +131,35 @@ class BeaconsCron extends Command
      */
     public function handle()
     {
+
+        $time_start = microtime(true);
         $eve_data = DB::table('users')->where('eve_id', '94154296')->first();
 
         // check if eve data is empty
-        if(empty($eve_data)){ $this->info("No data found"); return; }
+        if(empty($eve_data)){ $this->info("cant find helious in users"); return; }
+
+        // check when the last update was
+        $last_update = $eve_data->updated_at;
+
+        // if over 20 minutes ago, refresh the token
+
+        $now = new DateTime();
+        $last_update = new DateTime($last_update);
+        $diff = $now->diff($last_update);
+        $diff = $diff->i;
+
+        if($diff >= 20 || $diff == null){
+            $this->refreshToken($eve_data->id);
+        } else {
+            $this->info("Token is still valid");
+        }
+
+        $this->info("Getting beacons...");
+
+        // recall the access token
+        $accessToken = $eve_data->accessToken;
 
         try {
-            // check if user has station_manager role
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, 'https://esi.evetech.net/latest/characters/'.$eve_data->eve_id.'/roles/?datasource=tranquility');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
-
-
-            $headers = array();
-            $headers[] = 'Accept: application/json';
-            $headers[] = 'Authorization: Bearer '.$eve_data->accessToken.'';
-            $headers[] = 'Cache-Control: no-cache';
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            $result = curl_exec($ch);
-            if (strpos($result, 'token is expired') !== false) {
-                $this->info("Token expired, refreshing token");
-                $this->refreshToken($eve_data->id);
-            }
-
             // get corporation structures
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, 'https://esi.evetech.net/latest/corporations/2014367342/structures/?datasource=tranquility&language=en&page=1');
@@ -172,7 +170,7 @@ class BeaconsCron extends Command
             $headers = array();
             $headers[] = 'Accept: application/json';
             $headers[] = 'Accept-Language: en';
-            $headers[] = 'Authorization: Bearer '.$eve_data->accessToken.'';        
+            $headers[] = 'Authorization: Bearer '.$accessToken.'';        
             $headers[] = 'Cache-Control: no-cache';
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             // check if curl has error
@@ -181,15 +179,26 @@ class BeaconsCron extends Command
 
             curl_close($ch);
 
+            $this->info("Got beacons...");
+            $this->info("Looping through beacons...");
+            $this->info("This may take a while...");
+
             foreach($structures as $strcture){
                 if($strcture['type_id'] !== 35840){
                     continue;
                 }
+
+                $incMaybe = $this->CheckForIncusrion($strcture['system_id']);
+
+                $name = explode(" - ", $strcture['name']);
+
                 // check if fuel_expires is 3 days from now
 			    $dayy = $strcture['fuel_expires'] ?? null;
                 $fuel_expires = new DateTime($dayy);
                 $now = new DateTime();
                 $diff = $fuel_expires->diff($now);
+
+                $offline = $strcture["services"][0]["state"];
 
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, 'https://esi.evetech.net/latest/universe/systems/'.$strcture['system_id'].'/?datasource=tranquility&language=en');
@@ -222,35 +231,39 @@ class BeaconsCron extends Command
                 if($days < 10){
                     $days = '0'.$days;
                 }
-                // G-KCFT - HORDE MANGO BEACON
-                $name = explode(" - ", $strcture['name']);
 
-                // remove everything before "- "
-                $system = explode("- ", $name[1]);
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, 'https://esi.evetech.net/latest/universe/regions/'.$const['region_id'].'/?datasource=tranquility&language=en');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'accept' => 'application/json',
+                    'Accept-Language' => 'en',
+                    'Cache-Control' => 'no-cache',
+                ]);
 
-                $this->info("Checking ".$name[0]);
-                $incMaybe = $this->CheckForIncusrion($name[0]);
+                $regionID = curl_exec($ch);
+                $region = json_decode($regionID, true);
+
 
                 # check if fuel_expires is null
                 if($incMaybe == false && $dayy == null){
                     $beacon = beacon::updateOrCreate(
                         ['structure_id' => $strcture['structure_id']],
-                        ['system' => $name[0], 'name' => $name[1], 'constellation' => $const['name'], 'expires_in' => '0FFLINE']
+                        ['system' => $name[0], 'name' => $name[1], 'constellation' => $const['name'], 'region' => $region['name'], 'expires_in' => '0FFLINE']
                     );
-                } elseif($incMaybe == true && $dayy == null){
+                } elseif($incMaybe == true && $offline == "offline"){
                     $beacon = beacon::updateOrCreate(
                         ['structure_id' => $strcture['structure_id']],
-                        ['system' => $name[0], 'name' => $name[1], 'constellation' => $const['name'], 'expires_in' => '0FFLINE **[INCURSION]**']
+                        ['system' => $name[0], 'name' => $name[1], 'constellation' => $const['name'], 'region' => $region['name'], 'expires_in' => '0FFLINE **[INCURSION]**']
                     );
                 } else {
                     $beacon = beacon::updateOrCreate(
                         ['structure_id' => $strcture['structure_id']],
-                        ['system' => $name[0], 'name' => $name[1], 'constellation' => $const['name'], 'expires_in' => $days .' Days Left']
+                        ['system' => $name[0], 'name' => $name[1], 'constellation' => $const['name'], 'region' => $region['name'], 'expires_in' => $days .' Days Left']
                     );
                 }
-                if($beacon){
-                    $this->info("Beacon ".$name[0]." updated");
-                } else {
+                if(!$beacon){
                     $this->info("Beacon ".$name[0]." not updated");
                 }
             }
@@ -261,10 +274,88 @@ class BeaconsCron extends Command
                 ['status' => true]
             );
 
+            
+            // check if date is in $time
+            $deleting = beacon::whereDate('updated_at', 'like', Carbon::yesterday()->format('Y-m-d'))->delete();
+            // check if beacons were deleted
+            if($deleting){
+                $this->info("Beacons deleted");
+            }
+            $time_end = microtime(true);
+            $execution_time = ($time_end - $time_start)/60;
+            // make $execution_time 2 decimal places
+            $execution_time = round($execution_time, 2);
 
+            // delete any beacons that are older than 1 day
             $this->info("Completed updating beacon data");
+            $this->line("memory usage: ".(memory_get_usage(true) / 1024 / 1024)."mb");
+            $this->line("Total Execution Time: ".$execution_time." Seconds");
+
+            
+
+            $url = 'https://discord.com/api/webhooks/997481477405167718/OuBwEPLrj_ORzI0YlnsbG7DvvSAfqnscDK4TXAO6DquaFy0yk02ZQOlFDnCP31CFEtGz';
+
+            Http::post($url, [
+                'username' => "BUSA Beacons",
+                'avatar_url' => "http://games.chruker.dk/eve_online/graphics/ids/512/22262.jpg",
+                'embeds' => [
+                    [
+                        "title" => "BUSA Beacons",
+                        "description" => "Successfully updated beacons",
+                        "color" => "3066993",
+                        "fields" => [
+                            [
+                                "name" => "Message",
+                                "value" => 'Completed updating beacon data',
+                                "inline" => false
+                            ],
+                            [
+                                "name" => 'Executed By',
+                                "value" => $this->argument('by') ? $this->argument('by') : 'SYSTEM',
+                                "inline" => false
+                            ],
+                            [
+                                "name" => "Memory Usage",
+                                "value" => (memory_get_usage(true) / 1024 / 1024).'mb',
+                                "inline" => true
+                            ],
+                            [
+                                "name" => "Execution Time",
+                                "value" => $execution_time.' Seconds',
+                                "inline" => true
+                            ]
+                        ]
+                    ]
+                ]
+            ]);
 
         } catch (\Exception $e) {
+            $numberOfTrys++;
+
+            $url = 'https://discord.com/api/webhooks/997481477405167718/OuBwEPLrj_ORzI0YlnsbG7DvvSAfqnscDK4TXAO6DquaFy0yk02ZQOlFDnCP31CFEtGz';
+
+            if($numberOfTrys >= 3){
+                Http::post($url, [
+                    'username' => "BUSA Beacons",
+                    'content' => "@here",
+                    'avatar_url' => "http://games.chruker.dk/eve_online/graphics/ids/512/22262.jpg",
+                    'embeds' => [
+                        [
+                            "title" => "BUSA Beacons",
+                            "description" => "Error updating beacons",
+                            "color" => "15158332",
+                            "fields" => [
+                                [
+                                    "name" => "Message",
+                                    "value" => $e->getMessage().' on line '.$e->getLine(),
+                                    "inline" => false
+                                ]
+                            ]
+                        ]
+                    ]
+                ]);
+                return;
+            }
 
             // update status model to true
             $status = status::updateOrCreate(
@@ -272,7 +363,7 @@ class BeaconsCron extends Command
                 ['status' => false]
             );
             $this->info($e->getMessage().' on line '.$e->getLine());
-            $this->call('get:beacons');
+            $this->call('get:beacons', ['by' => 'SYSTEM', 'numberOfTrys' => $numberOfTrys]);
         }
     }
 }

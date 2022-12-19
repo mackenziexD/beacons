@@ -18,7 +18,7 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         // run get:fuel daily at midnight
         $schedule->command('get:fuel')->dailyAt('11:30');
-        $schedule->command('get:beacons')->cron('*/15 * * * *');
+        $schedule->command('get:beacons CronJob 0')->everyFifteenMinutes();
     }
 
     /**

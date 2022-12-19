@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use DateTime;
 use App\Models\beacon;
 use DB;
+use Carbon\Carbon;
+use App\Models\Status;
 
 class HomeController extends Controller
 {
@@ -78,6 +80,9 @@ class HomeController extends Controller
      */
     public function index()
     {
+    
+
+
             // get eve_data from session
             $eve_data = auth()->user();
 
@@ -85,39 +90,58 @@ class HomeController extends Controller
             if(!$checkCorp){ return redirect('/')->with('error', 'This character is not in Blackwater USA Inc.'); }
 
             $beacons = beacon::all();
-
-            // loop through beacons and format into table
             $tableData = '';
-            foreach($beacons as $beacon){
 
-                $bg = "";
-                switch ($beacon->expires_in) {
-                    case $beacon->expires_in <= 07:
-                        $bg = 'warning';
-                        break;
-                    case $beacon->expires_in <= 02:
-                        $bg = 'danger';
-                        break;
-                }
-
-                // check if expires in contains "INCURSION"
-                if(strpos($beacon->expires_in, '[INCURSION]') !== false){
-                    $bg = 'pink';
-                }
-                
-                // check if expires in contains "INCURSION"
-                if(strpos($beacon->expires_in, 'OFFLINE') !== false && $beacon->expires_in <= 02){
-                    $bg = 'danger';
-                }
-
-                $tableData .= '<tr class="'.$bg.'" >';
-                $tableData .= '<td>'.$beacon->system.'</td>';
-                $tableData .= '<td>'.$beacon->name.'</td>';
-                $tableData .= '<td>'.$beacon->constellation.'</td>';
-                $tableData .= '<td>'.$beacon->expires_in.'</td>';
+            // check if beacons is empty
+            if($beacons->isEmpty()){
+                $tableData .= '<tr>';
+                $tableData .= '<td class="text-center" colspan="4"> No Data Found </td>';
                 $tableData .= '</tr>';
-            }
+                $updatedAt = "Waiting on pull.";
+                return view('home', compact('eve_data', 'tableData', 'updatedAt'));
+            } else {
 
-            return view('home', compact('eve_data', 'tableData'));
+                // loop through beacons and format into table
+                $tableData = '';
+                foreach($beacons as $beacon){
+
+                    $bg = "";
+                    switch ($beacon->expires_in) {
+                        case $beacon->expires_in <= 07:
+                            $bg = 'warning';
+                            break;
+                        case $beacon->expires_in <= 02:
+                            $bg = 'danger';
+                            break;
+                    }
+
+                    // check if expires in contains "INCURSION"
+                    if(strpos($beacon->expires_in, '[INCURSION]') !== false){
+                        $bg = 'pink';
+                    }
+                    
+                    // check if expires in contains "INCURSION"
+                    if(strpos($beacon->expires_in, 'OFFLINE') !== false && $beacon->expires_in <= 02){
+                        $bg = 'danger';
+                    }
+
+                    // remove "Days Left" from expires in
+                    $expires_in = str_replace("Days Left", "", $beacon->expires_in);
+
+                    $tableData .= '<tr class="'.$bg.'" >';
+                    $tableData .= '<td>'.$beacon->system.'</td>';
+                    $tableData .= '<td>'.$beacon->name.'</td>';
+                    $tableData .= '<td>'.$beacon->constellation.'</td>';
+                    $tableData .= '<td>'.$beacon->region.'</td>';
+                    $tableData .= '<td>'.$expires_in.'</td>';
+                    $tableData .= '</tr>';
+                }
+
+                // get first beacon in table
+                $firstBeacon = status::first();
+                $updatedAt = $firstBeacon->updated_at->diffForHumans();
+
+                return view('home', compact('eve_data', 'tableData', 'updatedAt'));
+            }
     }
 }

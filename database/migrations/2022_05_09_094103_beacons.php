@@ -19,6 +19,7 @@ class Beacons extends Migration
             $table->string('system');
             $table->string('name');
             $table->string('constellation');
+            $table->string('region');
             $table->string('expires_in');
             $table->timestamps();
         });

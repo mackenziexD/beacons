@@ -95,22 +95,28 @@ tr.even {
                 "oLanguage": {
                 "sLengthMenu": "Show  _MENU_",
                 },
+                "orderable": true,
                 "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "Show All"]],
-                "order": [[ 3, "asc" ]]
+                "order": [[ 4, "asc" ]],
             });
 
             // find any rows with text "OFFLINE"
             var row = table.rows( function ( idx, data, node ) {
-                return data[3] === "OFFLINE" || data[3] === "OFFLINE **[INCURSION]**";
+                return data[4] === "0FFLINE" || data[4] === "0FFLINE **[INCURSION]**";
             } );
             row.nodes().to$().prependTo( '#fuel tbody' );
             row.nodes().to$().addClass( 'danger' );
+
+            // move any 3 digit numbers to bottom of table
+            var row = table.rows( function ( idx, data, node ) {
+                return data[4].length === 3;
+            } );
 
             // every time table is redrawn, check for OFFLINE rows
             table.on( 'draw', function () {
                 // find any rows with text "OFFLINE"
                 var row = table.rows( function ( idx, data, node ) {
-                    return data[3] === "OFFLINE" || data[3] === "OFFLINE **[INCURSION]**";
+                    return data[4] === "0FFLINE" || data[4] === "0FFLINE **[INCURSION]**";
                 } );
                 row.nodes().to$().prependTo( '#fuel tbody' );
                 row.nodes().to$().addClass( 'danger' );
