@@ -2,7 +2,7 @@
 
 ## What is it?
 
-BUSA Beacons is a laravel framework that automatically pulls fuel from the EVE Online API to populate tables in a database for the corporation Blackwater USA Inc. It also has a ability to push data to a discord channel.
+BUSA Beacons is a laravel framework that automatically pulls fuel from the EVE Online API to populate tables in a database for the corporation Blackwater USA Inc.
 
 ## How do I use it?
 
